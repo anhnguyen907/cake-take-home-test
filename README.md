@@ -33,3 +33,13 @@ Main requirements:
 - Data must be transferred incrementally from source to destination.
 
 - Because "**Deleted files** on the SFTP server at <source> **must remain** on the <destination> server." Therefore, I assume there are no instances of overwriting the file at the source, for example, file_1.txt is deleted, then a content file with the same name file_1.txt is created. File_1.txt at the destination will not be changed.
+
+Solutions:
+- Lookup source path, find files.
+- Keep track the synced file to target.
+- Compare source files with synced files to find the new files.
+
+Enhancement:
+- CheckSum, Transfer with Chunk Size, Retry on Error.
+- Add CustomOperator.
+- Store the synced file to Metadata Database with new tables, no need to store synced file in Airflow Variable.
