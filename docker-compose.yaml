@@ -96,6 +96,9 @@ services:
       POSTGRES_DB: airflow
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
+      - ./scripts/bash:/home/scripts
+    ports:
+      - "5432:5432"
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "airflow"]
       interval: 10s
@@ -332,6 +335,26 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+  
+  sftp_source:
+    image: atmoz/sftp
+    container_name: sftp_source
+    ports:
+      - "2222:22"
+    volumes:
+      - ./data/source:/home/sftpuser/upload
+    command: sftpuser:password:1001
+    restart: unless-stopped
+
+  sftp_target:
+    image: atmoz/sftp
+    container_name: sftp_target
+    ports:
+      - "2223:22"
+    volumes:
+      - ./data/target:/home/sftpuser/upload
+    command: sftpuser:password:1001
+    restart: unless-stopped
 
 volumes:
   postgres-db-volume:
