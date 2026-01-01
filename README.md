@@ -35,6 +35,9 @@ Main requirements:
 - Because "**Deleted files** on the SFTP server at <source> **must remain** on the <destination> server." Therefore, I assume there are no instances of overwriting the file at the source, for example, file_1.txt is deleted, then a content file with the same name file_1.txt is created. File_1.txt at the destination will not be changed.
 
 Solutions:
+
+![Data flow](images/flow.png)
+
 - Lookup source path, find files.
 - Keep track the synced file to target.
 - Compare source files with synced files to find the new files.

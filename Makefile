@@ -7,6 +7,9 @@ add_meta_database:
 	docker exec -it $(POSTGRES_CONTAINER) psql -U airflow -d airflow -f /home/scripts/create_database__metadata.sql
 	docker exec -it $(POSTGRES_CONTAINER) psql -U airflow -d metadata -f /home/scripts/create_table__sftp_synced_files.sql
 
+setup_sftp_servers:
+	docker-compose up sftp_source sftp_target -d
+
 setup_connections:
 	docker exec -it $(SCHEDULER_CONTAINER) airflow connections add  --conn-type sftp --conn-host sftp_source --conn-login sftpuser --conn-password password --conn-port 22 sftp_source
 	docker exec -it $(SCHEDULER_CONTAINER) airflow connections add  --conn-type sftp --conn-host sftp_target --conn-login sftpuser --conn-password password --conn-port 22 sftp_target

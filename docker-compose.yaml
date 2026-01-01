@@ -342,7 +342,7 @@ services:
     ports:
       - "2222:22"
     volumes:
-      - ./data/source:/home/sftpuser/upload
+      - ./data/source:/home/sftpuser
     command: sftpuser:password:1001
     restart: unless-stopped
 
@@ -352,7 +352,7 @@ services:
     ports:
       - "2223:22"
     volumes:
-      - ./data/target:/home/sftpuser/upload
+      - ./data/target:/home/sftpuser
     command: sftpuser:password:1001
     restart: unless-stopped
 
