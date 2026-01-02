@@ -50,13 +50,21 @@ Examples:
 4. Optional Transformations
 - Transformations are supported but discouraged for complex use cases.
 
+#### Trade-offs
+| Decision                         | Trade-off                                |
+| -------------------------------- | ---------------------------------------- |
+| Checksum computed on source only | Cannot validate transformed target bytes |
+| Resume requires prefix re-hash   | Slight performance cost                  |
+| Transform during file transfer   | Limited observability and validation     |
+
+
 #### Transformation Policy
 
 Although transformations are technically supported, they are not recommended for production-grade processing.
 For complex or computationally expensive transformations, a separate data pipeline should be used:
 1. Sync raw files.
 2. Transform in a dedicated processing job. E.g: transformations can be processed in Hadoop cluster, Spark cluster, Glue,...
-3. Write outputs to destination storage.
+3. Write outputs and control output to destination storage. E.g when i transfer file_1.txt, i will also create a file_20260101100110.json, the folder can be like this /a/b/c/date=2026-01-01/data/file_1.txt, /a/b/c/date=2026-01-01/metadata/file_1.json. The manifest file contains some infomation about the data: No. Rows, List of Columns and its Datatype, CheckSum, number of data files,...
 
 > Synchronization and transformation serve different purposes and should be handled in different layers.
 
@@ -71,6 +79,13 @@ To add a new storage system (e.g. S3):
 
 
 ### Runbook:
+#### Prerequisites
+- Docker
+- Make tool
+
+```
+git clone https://github.com/anhnguyen907/cake-take-home-test.git && cd cake-take-home-test
+```
 
 1. First setup airflow cluster
 ```
@@ -88,7 +103,7 @@ make setup_airflow_connections
 ```
 Please wait a moment for the Airflow Dag processing to complete.
 
-4. Simulate create data files to source SFTP
+4. Simulate the creation of data files at **SFTP source**.
 ```
 mkdir -p data/source/a/b/c && echo "abc" > data/source/a/b/c/file_1.txt
 ```
