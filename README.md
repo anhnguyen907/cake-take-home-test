@@ -25,47 +25,161 @@ Examples:
     - Any additional plugins required for the project.
 
 ## Approach:
-Follow the [link](https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html#fetching-docker-compose-yaml) to set up Airflow in Docker.
-
-Based on the problem requirements, we want to create a process to transfer files between SFTP servers.
-
 ### Main requirements:
+- Based on the problem requirements, we want to create a process to transfer files between SFTP servers.
 - Data must be transferred incrementally from source to destination.
-
 - Because "**Deleted files** on the SFTP server at <source> **must remain** on the <destination> server." Therefore, I assume there are no instances of overwriting the file at the source, for example, file_1.txt is deleted, then a content file with the same name file_1.txt is created. File_1.txt at the destination will not be changed.
 
 ### Solutions:
 
 ![Data flow](images/flow.png)
 
-- Lookup source path, find files.
-- Keep track the synced file to target.
-- Compare source files with synced files to find the new files.
+#### Design Decisions
+1. Create Metadata Database. A dedicated metadata database is used instead of Airflow Variables or XComs to:
+- Avoid scheduler overload
+- Supports large-scale file tracking in the future, when the number of files may be very large.
+- Enable cross-DAG reuse in the future
 
-### Enhancement:
-- CheckSum, Transfer with Chunk Size, Retry on Error.
-- Add CustomOperator.
-- Store the synced file to Metadata Database with new tables, no need to store synced file in Airflow Variable.
+2. Storage Adapter Abstraction
+- Hooks are converted into storage adapters at runtime.
+- This decouples DAGs and operators from specific storage technologies (SFTP servers, GCS, S3,...)
 
-### My observations:
-This operator supports optional transformations during file sync.
+3. Resume-on-Failure.
+- Partial files (.part) are used to support resumable transfers.
 
-However, transformations are **not recommended** for production use cases.
+4. Optional Transformations
+- Transformations are supported but discouraged for complex use cases.
 
-For complex or large-scale transformations, use a dedicated data pipeline
-after synchronizing raw files.
+#### Transformation Policy
 
-In real-world data platforms, transformations should be handled as a separate processing stage, for example:
-1. Read data from the source system
-2. Transform data using a dedicated processing engine
-3. Write transformed output to the target system
+Although transformations are technically supported, they are not recommended for production-grade processing.
+For complex or computationally expensive transformations, a separate data pipeline should be used:
+1. Sync raw files.
+2. Transform in a dedicated processing job. E.g: transformations can be processed in Hadoop cluster, Spark cluster, Glue,...
+3. Write outputs to destination storage.
 
-Typical tools for such pipelines include:
-- Apache Spark
-- Apache Flink
+> Synchronization and transformation serve different purposes and should be handled in different layers.
 
-This separation ensures:
-- Clear responsibility boundaries
-- Easier observability and debugging
-- Correct checksum and data integrity guarantees
-- Better scalability for complex transformations
+My opinion may be right or wrong depending on the specific circumstances. 😊
+
+#### Extensibility
+
+To add a new storage system (e.g. S3):
+1. Implement a new StorageAdapter
+2. Register it using @register_adapter(HookClass)
+3. Use the corresponding Hook in the DAG
+
+
+### Runbook:
+
+1. First setup airflow cluster
+```
+make setup_airflow_cluster
+```
+
+2. Add Meta Database to Postgres database
+```
+make add_meta_database
+```
+
+3. Create Airflow Connections
+```
+make setup_airflow_connections
+```
+Please wait a moment for the Airflow Dag processing to complete.
+
+4. Simulate create data files to source SFTP
+```
+mkdir -p data/source/a/b/c && echo "abc" > data/source/a/b/c/file_1.txt
+```
+We can run below scripts to check list on SFTP **source** server
+```
+make sftp_check_files SFTP_CONTAINER="sftp_source"
+```
+The output of source -> 
+```
+docker exec -it sftp_source ls -Rtl /home/sftpuser/
+/home/sftpuser/:
+total 0
+drwxr-xr-x 3 root root 96 Jan  2 03:46 a
+
+/home/sftpuser/a:
+total 0
+drwxr-xr-x 3 root root 96 Jan  2 03:46 b
+
+/home/sftpuser/a/b:
+total 0
+drwxr-xr-x 3 root root 96 Jan  2 03:46 c
+
+/home/sftpuser/a/b/c:
+total 4
+-rw-r--r-- 1 root root 4 Jan  2 03:46 file_1.txt
+```
+5. Now we can trigger DAG to verify file transfer.
+
+```
+make airflow_trigger_dag
+```
+> You can go to: http://localhost:8080/dags/sftp_data_file_transfer to check the DAG processing status. User:Password - airflow:airflow
+
+We can run below scripts to check list on SFTP **target** server
+```
+make sftp_check_files SFTP_CONTAINER="sftp_target"
+```
+The output of target-> 
+```
+/home/sftpuser/:
+total 0
+drwxr-xr-x 3 root root 96 Jan  2 03:52 a
+
+/home/sftpuser/a:
+total 0
+drwxr-xr-x 3 root root 96 Jan  2 03:52 b
+
+/home/sftpuser/a/b:
+total 0
+drwxr-xr-x 3 root root 96 Jan  2 03:52 c
+
+/home/sftpuser/a/b/c:
+total 4
+-rw-r--r-- 1 root root 4 Jan  2 03:52 file_1.txt
+```
+
+Now /a/b/c/file_1.txt has been transferred to target. We can add two more files to the SFTP *source* to verify that *2 new files will be transferred to the target* and *modification time of file_1.txt will not be changed.*
+
+```
+mkdir -p data/source/a/b/c && echo "abcdef" > data/source/a/b/c/file_2.txt
+mkdir -p data/source/a/b/c && cat README.md > data/source/a/b/c/file_3.txt
+```
+Trigger DAG again.
+```
+make airflow_trigger_dag
+```
+Wait a few minutes and you can check the DAG processing status. Once the DAG runs successfully, proceed with verification.
+
+```
+make sftp_check_files SFTP_CONTAINER="sftp_target"
+```
+
+```
+docker exec -it sftp_target ls -Rtl /home/sftpuser/
+/home/sftpuser/:
+total 0
+drwxr-xr-x 3 root root 96 Jan  2 03:52 a
+
+/home/sftpuser/a:
+total 0
+drwxr-xr-x 3 root root 96 Jan  2 03:52 b
+
+/home/sftpuser/a/b:
+total 0
+drwxr-xr-x 5 sftpuser users 160 Jan  2 03:59 c
+
+/home/sftpuser/a/b/c:
+total 16
+-rw-r--r-- 1 root root 6555 Jan  2 03:59 file_3.txt
+-rw-r--r-- 1 root root    7 Jan  2 03:59 file_2.txt
+-rw-r--r-- 1 root root    4 Jan  2 03:52 file_1.txt
+```
+As you can see, file_1 has a modified time that doesn't change on the target server.
+
