@@ -29,12 +29,12 @@ Follow the [link](https://airflow.apache.org/docs/apache-airflow/stable/howto/do
 
 Based on the problem requirements, we want to create a process to transfer files between SFTP servers.
 
-Main requirements:
+### Main requirements:
 - Data must be transferred incrementally from source to destination.
 
 - Because "**Deleted files** on the SFTP server at <source> **must remain** on the <destination> server." Therefore, I assume there are no instances of overwriting the file at the source, for example, file_1.txt is deleted, then a content file with the same name file_1.txt is created. File_1.txt at the destination will not be changed.
 
-Solutions:
+### Solutions:
 
 ![Data flow](images/flow.png)
 
@@ -42,7 +42,30 @@ Solutions:
 - Keep track the synced file to target.
 - Compare source files with synced files to find the new files.
 
-Enhancement:
+### Enhancement:
 - CheckSum, Transfer with Chunk Size, Retry on Error.
 - Add CustomOperator.
 - Store the synced file to Metadata Database with new tables, no need to store synced file in Airflow Variable.
+
+### My observations:
+This operator supports optional transformations during file sync.
+
+However, transformations are **not recommended** for production use cases.
+
+For complex or large-scale transformations, use a dedicated data pipeline
+after synchronizing raw files.
+
+In real-world data platforms, transformations should be handled as a separate processing stage, for example:
+1. Read data from the source system
+2. Transform data using a dedicated processing engine
+3. Write transformed output to the target system
+
+Typical tools for such pipelines include:
+- Apache Spark
+- Apache Flink
+
+This separation ensures:
+- Clear responsibility boundaries
+- Easier observability and debugging
+- Correct checksum and data integrity guarantees
+- Better scalability for complex transformations
