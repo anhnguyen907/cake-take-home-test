@@ -50,6 +50,9 @@ Examples:
 4. Optional Transformations
 - Transformations are supported but discouraged for complex use cases.
 
+5. Read a file with ChunkSize
+- By using chunkSize for data reading, we can ensure that handling large data files up to GB will still be efficient.
+
 #### Trade-offs
 | Decision                         | Trade-off                                |
 | -------------------------------- | ---------------------------------------- |
