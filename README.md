@@ -183,3 +183,7 @@ total 16
 ```
 As you can see, file_1 has a modified time that doesn't change on the target server.
 
+#### Cleanup resources
+```
+make clean_up
+```
